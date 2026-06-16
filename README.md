@@ -154,7 +154,7 @@ flowchart TB
 
 ```bash
 # Clone & install (3 dependencies only)
-git clone https://github.com/krynn/injecta.git
+git clone https://github.com/KrynnTeam/Injecta.git
 cd injecta
 pip install -r injecta/requirements.txt
 

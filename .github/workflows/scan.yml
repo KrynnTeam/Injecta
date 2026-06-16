@@ -1,0 +1,74 @@
+name: Injecta CI/CD Scan
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target URL to scan'
+        required: true
+        type: string
+      technique:
+        description: 'Scan technique (BEUST)'
+        required: false
+        default: 'BEUST'
+        type: string
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - run: pip install flake8
+      - run: flake8 injecta/ --max-line-length=120 --extend-ignore=E203,W503
+
+  scan:
+    needs: lint
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - name: Run Injecta scan
+        run: |
+          python run.py -u "${{ github.event.inputs.target }}" \
+            --technique "${{ github.event.inputs.technique }}" \
+            --dbs --batch --no-color \
+            --output-dir reports \
+            --report
+      - uses: actions/upload-artifact@v4
+        with:
+          name: injecta-reports
+          path: reports/
+
+  nightly-scan:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - run: |
+          python run.py -u "https://testphp.vulnweb.com/artists.php?artist=1" \
+            --dbs --batch --no-color --output-dir reports --report
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nightly-reports
+          path: reports/

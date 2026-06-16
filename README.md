@@ -4,8 +4,6 @@
 
 </div>
 
-# Injecta
-
 ### SQL Injection Automation Framework — Detection → Extraction → Exfiltration
 
 Zero web dependencies · 6 DBMS backends · 5 injection techniques · 19 WAF tamper scripts · Plugin system

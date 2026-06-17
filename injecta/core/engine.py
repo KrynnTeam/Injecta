@@ -22,6 +22,7 @@ from injecta.payloads.sqlite import SQLitePayloads
 from injecta.utils.helpers import extract_dbms_from_error
 from injecta.utils.waf import WAFDetector
 from injecta.utils.tamper import apply_tampers, build_chain, suggest_chains
+from injecta.enum.extract import detect_column_count, detect_column_position
 from injecta.techniques.nosql import NoSQLDetector
 from injecta.techniques.graphql import GraphQLInjector
 from injecta.enum.privesc import PrivilegeEscalation
@@ -123,6 +124,7 @@ class ScanEngine:
             self.log.error(f"No payload provider for {self.dbms}.")
             return
 
+        self._ensure_column_count(url)
         self._handle_file_ops(url)
 
         if self.config.privesc or self.config.level >= 3:
@@ -358,6 +360,23 @@ class ScanEngine:
                 if dbms_name == "sqlite" and ("sqlite" in resp_text.lower()):
                     return True
         return False
+
+    def _ensure_column_count(self, url: str):
+        if not self.injection_info:
+            return
+        param = self.injection_info.get("param", "")
+        if not param:
+            return
+        if not self.injection_info.get("column_count"):
+            self.log.info("Detecting column count (ORDER BY)...")
+            cols = detect_column_count(self.req, url, param)
+            self.injection_info["column_count"] = cols
+        cols = self.injection_info.get("column_count", 1)
+        if not self.injection_info.get("data_pos"):
+            self.log.info("Detecting data position...")
+            pos = detect_column_position(self.req, url, param, cols)
+            self.injection_info["data_pos"] = pos
+        self.log.debug(f"Columns: {cols}, data position: {self.injection_info.get('data_pos', 1)}")
 
     def _execute_enumeration(self, url: str):
         param = self.injection_info.get("param", "") if self.injection_info else ""

